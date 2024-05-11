@@ -1,4 +1,4 @@
 @echo off
-python build.py code.txt
-"C:\Program Files (x86)\UltraISO\UltraISO.exe" -silent -bootfile C:\Users\GIKExe\Desktop\python-compiller\code.txt.bin -file C:\Users\GIKExe\Desktop\python-compiller\code.txt.bin -output C:\Users\GIKExe\Desktop\python-compiller\code.iso
+python build.py %cd%\code.txt -boot
+ultraiso_pp.exe -silent -bootfile %cd%\out\code.bin -file %cd%\out\code.bin -output %cd%\out\code.iso
 pause
