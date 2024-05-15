@@ -2,20 +2,11 @@ import os
 import sys
 
 
-from local import getType, Type, Convert, Bytes
+from local import getType, Type, Convert, Bytes, Line, parseLines
 from local.Log import *
 
 
-class Line(list):
-	def __init__(self, index, *args, **kwargs):
-		super().__init__(*args, **kwargs)
-		self.index = index
-		self.counter = 0
-
-	def get(self) -> str:
-		if len(self) == 0: error(f'{self.index}: строка неожиданно закончилась')
-		self.counter += 1
-		return self.pop(0)
+BOOT = '-boot' in sys.argv
 
 
 if len(sys.argv) < 2:
@@ -75,7 +66,7 @@ def strToInt(string):
 		return int(string)
 
 mode = 'x16'
-position = (0x7C00 if '-boot' in sys.argv else 0)
+position = (0x7C00 if BOOT else 0)
 
 for index, line in enumerate(lines):
 	if len(line) == 0: continue
@@ -145,7 +136,7 @@ for index, line in enumerate(lines):
 normal("компиляция завершена")
 info("запись в файл...")
 
-if '-boot' in sys.argv:
+if BOOT:
 	if len(out) > 510:
 		error("файл больше boot сектора")
 	out += [0 for _ in range(510 - len(out))]
