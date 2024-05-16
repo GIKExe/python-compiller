@@ -54,14 +54,28 @@ import os
 # 		return self.pop(0)
 	
 
+def TYPE(cls):
+	cls.__str__ = lambda self: self.__class__.__name__
+	return cls()
 
+@TYPE 
 class BIT: ...
+@TYPE
+class BYT: ...
+@TYPE
 class INT: ...
+@TYPE
 class HEX: ...
+@TYPE
 class STR: ...
+@TYPE
 class FLT: ...
 
+
 class String(str):
+	def __init__(self, *args, **kwargs):
+		super().__init__()
+
 	def sw(self, *a, **b):
 		return self.startswith(*a, **b)
 	
@@ -71,6 +85,7 @@ class String(str):
 	def only(self, symbols):
 		for s in self:
 			if s not in symbols: return False
+		if len(self) == 0: return False
 		return True
 
 
@@ -78,11 +93,26 @@ _type = type
 def type(text):
 	text = String(text)
 
-	if text.sw('b') and text.only('01'):
+	if len(text) == 0:
+		return None
+	if text.sw('b') and String(text[1:]).only('01'):
 		return BIT
-	if text.sw('0x') and text.only('0123456789ABCDEF'):
+	if text.only('0123456789'):
+		return INT
+	if text.count('.') == 1 and String(text.split('.')[0]).only("0123456789") and String(text.split('.')[1]).only("0123456789"):
+		return FLT
+	if text.sw('0x') and String(text[2:]).only('0123456789ABCDEF'):
 		return HEX
-	
+	if text[0] == '"' and text[-1] == '"':
+		if len(text) < 3:
+			raise Exception("STR тип должен содержать больше 0 символов в двойных кавычках")
+		return STR
+	if text[0] == "'" and text[-1] == "'":
+		if len(text) != 3:
+			raise Exception("BYT тип должен содержать 1 символ в одиночных кавычках")
+		return BYT
+	return None, text
+
 
 def parser(text):
 	class d:
@@ -119,14 +149,16 @@ def parser(text):
 			if s == '"':
 				d.string = True
 			elif s == '\n':
-				out.append(line)
+				if len(line) > 1 or len(line[-1]) > 1 or len(line[-1][-1]) > 0:
+					out.append(line)
 				line = [[""]]
 				continue
 			elif s == ';':
 				line.append([''])
 				continue
 			elif s == ' ':
-				line[-1].append('')
+				if len(line[-1][-1]) > 0:
+					line[-1].append('')
 				continue
 			line[-1][-1] += s
 
@@ -134,9 +166,13 @@ def parser(text):
 
 
 if __name__ == "__main__":
-	with open(R'C:\Users\GIKExe\Desktop\python-compiller\test.txt', 'r', encoding="UTF8") as file:
+	with open(R'test.txt', 'r', encoding="UTF8") as file:
 		text = file.read()
 	
 	out = parser(text)
-	for line in out:
-		print(line)
+	os.system('cls')
+	print('\n', out, '\n\n')
+	for li, line in enumerate(out):
+		for si, subline in enumerate(line):
+			for ti, text in enumerate(subline):
+				print(f'{li:3} {si:3} {ti:3}   {type(text)}   {[text]}')

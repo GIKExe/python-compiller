@@ -1,3 +1,6 @@
-adl 1adkl "sas\""; int 0x10
-333d asdsd 'c'
-x
+b01001010 b01001011; b1
+0xF2
+
+123
+"this is string"
+'B'
