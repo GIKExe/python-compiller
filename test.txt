@@ -1,6 +1,15 @@
-b01001010 b01001011; b1
-0xF2
+mov AL 0x03
+bios 0x10
 
-123
-"this is string"
-'B'
+mov AH 0x03
+bios 0x10
+mov CH 0x00
+
+# вывод на экран зелёный '?'
+mov BL 0x02
+0x2
+
+mov AH 0x09
+mov CL 0x01
+mov AL '?'
+bios 0x10

@@ -56,6 +56,7 @@ import os
 
 def TYPE(cls):
 	cls.__str__ = lambda self: self.__class__.__name__
+	cls.__repr__ = lambda self: self.__class__.__name__
 	return cls()
 
 @TYPE 
@@ -94,23 +95,29 @@ def type(text):
 	text = String(text)
 
 	if len(text) == 0:
-		return None
+		return None, None
+
 	if text.sw('b') and String(text[1:]).only('01'):
-		return BIT
+		return BIT, text[1:]
+
 	if text.only('0123456789'):
-		return INT
+		return INT, text
+
 	if text.count('.') == 1 and String(text.split('.')[0]).only("0123456789") and String(text.split('.')[1]).only("0123456789"):
-		return FLT
+		return FLT, text
+
 	if text.sw('0x') and String(text[2:]).only('0123456789ABCDEF'):
-		return HEX
+		return HEX, text[2:]
+
 	if text[0] == '"' and text[-1] == '"':
 		if len(text) < 3:
 			raise Exception("STR тип должен содержать больше 0 символов в двойных кавычках")
-		return STR
+		return STR, text[1:-1]
+
 	if text[0] == "'" and text[-1] == "'":
 		if len(text) != 3:
 			raise Exception("BYT тип должен содержать 1 символ в одиночных кавычках")
-		return BYT
+		return BYT, text[1:-1]
 	return None, text
 
 
@@ -119,12 +126,17 @@ def parser(text):
 		slash = False
 		string = False
 		byte = False
+		comment = False
 
 	out = []
 	line = [[""]]
 
-	for s in text:
-		if d.slash:
+	for si, s in enumerate(text):
+		if d.comment:
+			if s == '\n':
+				d.comment = False
+
+		elif d.slash:
 			if s == 'n':
 				line[-1][-1] += '\n'
 			elif s == 't':
@@ -146,11 +158,14 @@ def parser(text):
 			line[-1][-1] += s
 
 		else:
-			if s == '"':
+			if s == '#':
+				d.comment = True
+				out.append([[""]])
+				continue
+			elif s == '"':
 				d.string = True
 			elif s == '\n':
-				if len(line) > 1 or len(line[-1]) > 1 or len(line[-1][-1]) > 0:
-					out.append(line)
+				out.append(line)
 				line = [[""]]
 				continue
 			elif s == ';':
@@ -161,6 +176,13 @@ def parser(text):
 					line[-1].append('')
 				continue
 			line[-1][-1] += s
+			if si == len(text)-1:
+				out.append(line)
+
+	for li, line in enumerate(out):
+		for si, subline in enumerate(line):
+			for ti, text in enumerate(subline):
+				out[li][si][ti] = type(text)
 
 	return out
 
@@ -175,4 +197,4 @@ if __name__ == "__main__":
 	for li, line in enumerate(out):
 		for si, subline in enumerate(line):
 			for ti, text in enumerate(subline):
-				print(f'{li:3} {si:3} {ti:3}   {type(text)}   {[text]}')
+				print(f'{li:3} {si:3} {ti:3}   {text}')

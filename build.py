@@ -1,10 +1,9 @@
 import os
 import sys
 
-
-from local import getType, Type, Convert, Bytes, Line, parseLines
+from local import parser
+from local import BIT, BYT, INT, HEX, STR, FLT
 from local.Log import *
-
 
 BOOT = '-boot' in sys.argv
 
@@ -15,122 +14,137 @@ if len(sys.argv) < 2:
 path = sys.argv[1]
 try:
 	with open(path, "r", encoding="UTF8") as file:
-		data = file.read()
+		text = file.read()
 except:
 	print(Fore.RED)
 	raise
 
-
-
-if "\r\n" in data:
-	lines = list(data.split("\r\n"))
-elif "\n" in data:
-	lines = list(data.split("\n"))
-else:
-	lines = [data]
-
-for index, line in enumerate(lines):
-	if " " in line:
-		line = Line(index, line.split(" "))
-	else:
-		line = Line(index, (line,))
-	lines[index] = line
-
-normal(f"прочитано {len(lines)} строк\n")
-
-
-BYTE = 2**8-1
-WORD = 2**16-1
-D_WORD = 2**32-1
-Q_WORD = 2**64-1
-
+lines = parser(text)
+mode = 'x16'
+position = (0x7C00 if BOOT else 0)
 out = []
 pointers = {}
 
-def isSigned(x, size=1):
-	if size < 1:
-		error('!!! isSignedSize >= 1')
-	size = 8*size-1
-	return (x >= -2**size and x <= 2**size-1)
+regADx8 = {
+	'AL': 0xB0, 'CL': 0xB1, 'DL': 0xB2, 'BL': 0xB3,
+	'AH': 0xB4, 'CH': 0xB5, 'DH': 0xB6, 'BH': 0xB7,
+}
 
-def strToInt(string):
-	if string.startswith("$") and len(string) > 1:
-		return string[1:]
-	if string.startswith("b"):
-		return int(string[1:], 2)
-	elif string.startswith("0x"):
-		return int(string[2:], 16)
-	elif (string.startswith('"') and string.endswith('"')) or (string.startswith("'") and string.endswith("'")):
-		return ord(string[1:-1])
-	else:
-		return int(string)
+def getSizeOfTextBlock(text):
+	type = text[0]
+	if type == BIT:
+		return len(text[1]) // 8 + 1
+	elif type == BYT:
+		return 1
+	elif type == HEX:
+		return len(text[1]) // 2 + 1
+	elif type == STR:
+		return len(text[1])
+	elif type == INT:
+		# вот тут самое сложное...
+		...
+	elif type == FLT:
+		# тут по идее только x32 и x64 ?
+		# можно сделать и x16, но зачем?
+		...
+	return None
 
-mode = 'x16'
-position = (0x7C00 if BOOT else 0)
+def textblockToByte(text):
+	size = getSizeOfTextBlock(text)
+	if text[0] == BIT:
+		...
+		# в доработке
 
-for index, line in enumerate(lines):
-	if len(line) == 0: continue
-	com = line.get()
-	if com.startswith("#") or len(com) <= 1: continue
-	if com in ('x16', 'x32', 'x64'): mode = com; continue
+for li, line in enumerate(lines):
+	for si, subline in enumerate(line):
+		# lines[line[subline[text(TYPE, STRING)]]]
+		text = subline[0]
+		if text[1] == None: continue
+		if text[0] != None:
+			warn(f'{li+1:3}{si+1:3}  1: начинается с данных: {text[0]}')
+			continue
 
-	if com == 'bios':
-		x = line.get()
-		try: x = strToInt(x)
-		except: print(Fore.RED); raise
-		if x > BYTE:
-			error(f'{index}:{line.counter}: значение для данной команды максимум {BYTE}')
-		out += [0xCD, x]
-
-	elif com == 'mov':
-		reg = line.get().upper()
-		regADx8 = {'AL': 0xB0, 'AH': 0xB4, 'CL': 0xB1, 'CH': 0xB5,
-						   'DL': 0xB2, 'DH': 0xB6, 'BL': 0xB3, 'BH': 0xB7}
-		
-		if reg in regADx8:
-			out.append(regADx8[reg])
-			x = line.get()
-			try: x = strToInt(x)
-			except: print(Fore.RED); raise
-			if x > BYTE:
-				error(f'{index}:{line.counter}: значение для данной команды максимум {BYTE}')
-			out += [x]
-		else:
-			error(f'{index}:{line.counter}: неподходящий регистр, доступны A-D x8 регистры')
-
-	elif com == 'db':
-		x = line.get()
-		try: x = strToInt(x)
-		except: print(Fore.RED); raise
-		if x > BYTE:
-			error(f'{index}:{line.counter}: значение для данной команды максимум {BYTE}')
-		out += [x]
-
-	elif com == 'jmp':
-		# https://www.felixcloutier.com/x86/jmp
-		x = line.get()
-		x, t = Convert.autoToInt(x)
-		if t is Type.STR:
-			if x == ':':
-				x = -2
-			elif x not in pointers:
-				error(f'{index}:{line.counter}: указатель не определён')
+		# записиь в байт-регистры
+		if text[1] in regADx8:
+			out.append(regADx8[text[1]])
+			if len(subline) < 2:
+				error(f'{li+1:3}{si+1:3}  1-2: подстрока неожиданно закончилась. ожидалось: ("=",)')
+			text = subline[1]
+			if text[0] != None:
+				error(f'{li+1:3}{si+1:3}  2: неверный тип: {text[0]}, ожидался: None')
+			if text[1] == '=':
+				if len(subline) < 3:
+					error(f'{li+1:3}{si+1:3}  2-3: подстрока неожиданно закончилась. ожидалось: (BIT, BYT, INT, HEX,)')
+				text = subline[2]
+				if text[0] not in (BIT, BYT, INT, HEX,):
+					error(f'{li+1:3}{si+1:3}  3: неверный тип: {text[0]}, ожидался: (BIT, BYT, INT, HEX,)')
+				# перевести любой из типов в байт
+				# добавить байт в out
 			else:
-				x = 0
+				error(f'{li+1:3}{si+1:3}  2: неверный аргумент. ожидалось: ("=",)')
+		print(*[z[1] for z in subline])
+			
+	# com = line.get()
+	# if com.startswith("#") or len(com) <= 1: continue
+	# if com in ('x16', 'x32', 'x64'): mode = com; continue
 
-		if mode == 'x16':
-			if isSigned(x, 1):
-				out += [0xEB] + Bytes.fromInt(x, 1, True)
-			elif isSigned(x, 2):
-				out += [0xE9] + Bytes.fromHex(x, 2, True)
-		else:
-			error(f'в режиме {mode} данная команда не работает')
+	# if com == 'bios':
+	# 	x = line.get()
+	# 	try: x = strToInt(x)
+	# 	except: print(Fore.RED); raise
+	# 	if x > BYTE:
+	# 		error(f'{index}:{line.counter}: значение для данной команды максимум {BYTE}')
+	# 	out += [0xCD, x]
 
-	elif com.startswith(":") and len(com) > 1:
-		pointers[com[1:]] = len(out)
+	# elif com == 'mov':
+	# 	reg = line.get().upper()
+	# 	regADx8 = {'AL': 0xB0, 'AH': 0xB4, 'CL': 0xB1, 'CH': 0xB5,
+	# 					   'DL': 0xB2, 'DH': 0xB6, 'BL': 0xB3, 'BH': 0xB7}
+		
+	# 	if reg in regADx8:
+	# 		out.append(regADx8[reg])
+	# 		x = line.get()
+	# 		try: x = strToInt(x)
+	# 		except: print(Fore.RED); raise
+	# 		if x > BYTE:
+	# 			error(f'{index}:{line.counter}: значение для данной команды максимум {BYTE}')
+	# 		out += [x]
+	# 	else:
+	# 		error(f'{index}:{line.counter}: неподходящий регистр, доступны A-D x8 регистры')
 
-	else:
-		error(f'{index}:{line.counter}: неизвестная команда {com}')
+	# elif com == 'db':
+	# 	x = line.get()
+	# 	try: x = strToInt(x)
+	# 	except: print(Fore.RED); raise
+	# 	if x > BYTE:
+	# 		error(f'{index}:{line.counter}: значение для данной команды максимум {BYTE}')
+	# 	out += [x]
+
+	# elif com == 'jmp':
+	# 	# https://www.felixcloutier.com/x86/jmp
+	# 	x = line.get()
+	# 	x, t = Convert.autoToInt(x)
+	# 	if t is Type.STR:
+	# 		if x == ':':
+	# 			x = -2
+	# 		elif x not in pointers:
+	# 			error(f'{index}:{line.counter}: указатель не определён')
+	# 		else:
+	# 			x = 0
+
+	# 	if mode == 'x16':
+	# 		if isSigned(x, 1):
+	# 			out += [0xEB] + Bytes.fromInt(x, 1, True)
+	# 		elif isSigned(x, 2):
+	# 			out += [0xE9] + Bytes.fromHex(x, 2, True)
+	# 	else:
+	# 		error(f'в режиме {mode} данная команда не работает')
+
+	# elif com.startswith(":") and len(com) > 1:
+	# 	pointers[com[1:]] = len(out)
+
+	# else:
+	# 	error(f'{index}:{line.counter}: неизвестная команда {com}')
 
 
 normal("компиляция завершена")
