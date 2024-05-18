@@ -1,12 +1,13 @@
 import os
 import sys
+import math
+from textwrap import wrap
 
 from local import parser
-from local import BIT, BYT, INT, HEX, STR, FLT
+from local import BIN, BYTE, INT, HEX, STR, FLOAT
 from local.Log import *
 
 BOOT = '-boot' in sys.argv
-
 
 if len(sys.argv) < 2:
 	error("Не указан путь к файлу")
@@ -20,68 +21,62 @@ except:
 	raise
 
 lines = parser(text)
+# print(lines)
+# exit()
+
 mode = 'x16'
 position = (0x7C00 if BOOT else 0)
 out = []
-pointers = {}
 
 regADx8 = {
 	'AL': 0xB0, 'CL': 0xB1, 'DL': 0xB2, 'BL': 0xB3,
 	'AH': 0xB4, 'CH': 0xB5, 'DH': 0xB6, 'BH': 0xB7,
 }
 
-def getSizeOfTextBlock(text):
-	type = text[0]
-	if type == BIT:
-		return len(text[1]) // 8 + 1
-	elif type == BYT:
-		return 1
-	elif type == HEX:
-		return len(text[1]) // 2 + 1
-	elif type == STR:
-		return len(text[1])
-	elif type == INT:
-		# вот тут самое сложное...
-		...
-	elif type == FLT:
-		# тут по идее только x32 и x64 ?
-		# можно сделать и x16, но зачем?
-		...
-	return None
 
-def textblockToByte(text):
-	size = getSizeOfTextBlock(text)
-	if text[0] == BIT:
-		...
-		# в доработке
+jmpNone = {}
+pointers = {}
 
 for li, line in enumerate(lines):
 	for si, subline in enumerate(line):
 		# lines[line[subline[text(TYPE, STRING)]]]
+		if len(subline) < 1: continue
+		index = Index(li, si, 0)
 		text = subline[0]
 		if text[1] == None: continue
 		if text[0] != None:
-			warn(f'{li+1:3}{si+1:3}  1: начинается с данных: {text[0]}')
+			warn(index, f'начинается с данных: {text[0]}')
 			continue
 
-		# записиь в байт-регистры
-		if text[1] in regADx8:
-			out.append(regADx8[text[1]])
+		if text[1] == 'bios':
+			out.append(0xCD)
+			index.ti += 1
 			if len(subline) < 2:
-				error(f'{li+1:3}{si+1:3}  1-2: подстрока неожиданно закончилась. ожидалось: ("=",)')
+				error(index, f'подстрока неожиданно закончилась. ожидалось: (BIN, BYTE, INT, STR)')
+
+		# записиь в байт-регистры
+		if text[1] in regADx8 and False:
+			out.append(regADx8[text[1]])
+			index.ti += 1
+			if len(subline) < 2:
+				error(index, f'подстрока неожиданно закончилась. ожидалось: ("=",)')
 			text = subline[1]
 			if text[0] != None:
-				error(f'{li+1:3}{si+1:3}  2: неверный тип: {text[0]}, ожидался: None')
+				error(index, f'неверный тип: {text[0]}, ожидался: None')
 			if text[1] == '=':
+				index.ti += 1
 				if len(subline) < 3:
-					error(f'{li+1:3}{si+1:3}  2-3: подстрока неожиданно закончилась. ожидалось: (BIT, BYT, INT, HEX,)')
+					error(index, f'подстрока неожиданно закончилась. ожидалось: (BIN, BYT, INT, HEX,)')
 				text = subline[2]
-				if text[0] not in (BIT, BYT, INT, HEX,):
-					error(f'{li+1:3}{si+1:3}  3: неверный тип: {text[0]}, ожидался: (BIT, BYT, INT, HEX,)')
-				# перевести любой из типов в байт
-				# добавить байт в out
+				if text[0] not in (BIN, BYT, INT, HEX,):
+					error(index, f'неверный тип: {text[0]}, ожидался: (BIN, BYT, INT, HEX,)')
+
+				raw = blockToBytes(text)
+				if len(raw) != 1:
+					error(index, f'неверный размер аргумента: {len(raw)}, ожидался: 1 байт')
+				out += raw
 			else:
-				error(f'{li+1:3}{si+1:3}  2: неверный аргумент. ожидалось: ("=",)')
+				error(index, f'неверный аргумент. ожидалось: ("=",)')
 		print(*[z[1] for z in subline])
 			
 	# com = line.get()
